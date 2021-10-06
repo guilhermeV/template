@@ -1,0 +1,36 @@
+{
+  "mappings": [
+    {
+      "request": {
+        "method": "GET",
+        "url": "/examples/1"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "status": "OK",
+          "message": "Hello World"
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "url": "/examples/2"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "status": "ERRO",
+          "message": "Hello World"
+        }
+      }
+    }
+  ]
+}

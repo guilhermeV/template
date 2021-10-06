@@ -1,0 +1,16 @@
+Configuration:
+  status: INFO
+  Appenders:
+    Console:
+      name: json
+      target: SYSTEM_OUT
+      JsonLayout:
+        compact: true
+        eventEol: true
+        includeTimeMillis: true
+        properties: true
+  Loggers:
+    AsyncRoot:
+      level: INFO
+      AppenderRef:
+        ref: json

@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: template
+  cloud:
+    vault:
+      token: ${VAULT_TOKEN:token123}
+      uri: ${VAULT_URI:http://localhost:8300} #will be overrided in EnvironmentListener
+      scheme: ${VAULT_SCHEME:http}
+      connection-timeout: ${VAULT_CONNECTION_TIMEOUT:5000}
+      read-timeout: ${VAULT_READ_TIMEOUT:15000}
+      authentication: ${VAULT_AUTHENTICATION:TOKEN}
+      kv:
+        enabled: false
+      database:
+        enabled: true
+        role: order
+        backend: database
+      enabled: true

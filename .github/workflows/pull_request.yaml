@@ -1,0 +1,148 @@
+name: Test-KLint-Build-Push
+
+on: [ pull_request ]
+
+jobs:
+  quality-code:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 16
+        uses: actions/setup-java@v2
+        with:
+          distribution: 'zulu'
+          java-version: 16.0.2+7
+
+      - name: Cache SonarCloud packages
+        uses: actions/cache@v2
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache Gradle
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            .gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Get Repository Name
+        id: slugrepo
+        run: echo "::set-output name=repo::$(echo ${GITHUB_REPOSITORY} | cut -d'/' -f2)"
+
+      - name: Run tests
+        run: GRADLE_OPTS='-Xms256m -Xmx1024m' SPRING_PROFILES_ACTIVE=integration ./gradlew --build-cache clean test ktlintCheck sonarqube --info
+        env:
+          SONAR_KEY: ${{ steps.slugrepo.outputs.repo }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_PACKAGES_USERNAME: ${{ secrets.GH_PACKAGES_USERNAME }}
+          GH_PACKAGES_PASSWORD: ${{ secrets.GH_PACKAGES_PASSWORD }}
+
+  build-push-docker-image:
+    needs: quality-code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Checkout private quanto actions
+        uses: actions/checkout@v2
+        with:
+          repository: ContaQuanto/github-actions-pipeline-ci
+          path: github-actions-pipeline-ci
+          ref: 'main'
+          token: ${{ secrets.QUANTOBOT_CICD_GH_TOKEN }}
+          ssh-key: ${{ secrets.QUANTOBOT_CICD_SSH_PRIVATE_KEY }}
+
+      - name: Get Short SHA 8
+        id: slug
+        run: echo "::set-output name=sha8::$(echo ${GITHUB_SHA} | cut -c1-8)"
+
+      - name: Cache Gradle
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+            .gradle
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - name: Build Kotlin V2
+        uses: ./github-actions-pipeline-ci/buildKotlinV2
+        with:
+          docker_ecr_repo: 254796605740.dkr.ecr.us-east-2.amazonaws.com
+          docker_image_name: ${GITHUB_REPOSITORY#*/}
+          docker_image_version: ${GITHUB_SHA::8}-SNAPSHOT
+        env:
+          BUILD_TAG_VERSION: ${{ steps.slug.outputs.sha8 }}-SNAPSHOT
+          GH_PACKAGES_USERNAME: ${{ secrets.GH_PACKAGES_USERNAME }}
+          GH_PACKAGES_PASSWORD: ${{ secrets.GH_PACKAGES_PASSWORD }}
+
+      - name: AWS credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.QUANTOBOT_CICD_AWS_ECR_DEV_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.QUANTOBOT_CICD_AWS_ECR_DEV_SECRET_KEY }}
+          aws-region: us-east-2
+
+      - name: AWS ECR Login
+        uses: aws-actions/amazon-ecr-login@v1
+
+      - name: SSH agent
+        uses: quan-to/actions-ssh-agent@893c4c419a07d7826bfe0178340cf03eadcf5f11
+        with:
+          ssh-private-key: ${{ secrets.QUANTOBOT_CICD_SSH_PRIVATE_KEY }}
+
+      - name: Push ECR Image
+        uses: ./github-actions-pipeline-ci/ecrPush
+        with:
+          aws_ecr_url: 254796605740.dkr.ecr.us-east-2.amazonaws.com
+          aws_ecr_image: ${GITHUB_REPOSITORY#*/}
+
+  deploy-dev:
+    needs: build-push-docker-image
+    runs-on: ubuntu-latest
+    environment:
+      name: dev
+      url: https://argocd.dev-cleveland.k8s.dev.contaquanto.net/
+
+    steps:
+      - name: Get Short SHA 8
+        id: slug
+        run: echo "::set-output name=sha8::$(echo ${GITHUB_SHA} | cut -c1-8)"
+
+      - name: Get Repository Name
+        id: slugrepo
+        run: echo "::set-output name=repo::$(echo ${GITHUB_REPOSITORY} | cut -d'/' -f2)"
+
+      - name: Write ArgoCD ConfigFile
+        id: argocd_config
+        uses: timheuer/base64-to-file@v1
+        with:
+          fileName: 'argocd.conf'
+          encodedString: ${{ secrets.ARGOCD_CONF_B64_TSP_DEV }}
+
+      - name: ArgoCD Set Command
+        uses: clowdhaus/argo-cd-action/@main
+        with:
+          version: 2.0.0
+          command: app set ${{ steps.slugrepo.outputs.repo }} -p image.tag=${{ steps.slug.outputs.sha8 }}-SNAPSHOT
+          options: --config ${{ steps.argocd_config.outputs.filePath }}
+
+      - name: ArgoCD Sync Command
+        uses: clowdhaus/argo-cd-action/@main
+        with:
+          version: 2.0.0
+          command: app sync ${{ steps.slugrepo.outputs.repo }}
+          options: --config ${{ steps.argocd_config.outputs.filePath }}

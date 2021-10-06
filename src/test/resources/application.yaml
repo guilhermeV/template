@@ -1,0 +1,87 @@
+spring:
+  main:
+    banner-mode: "off"
+  datasource:
+    url: jdbc:postgresql://localhost:5432/template #Will be overrided in AbstractKafkaAndPostgresAndVaultTestContainerTest
+  liquibase:
+    enabled: true
+  zipkin:
+    enabled: false
+  sleuth:
+    traceId128: true
+    baggage:
+      remote-fields:
+        - x-gravitee-transaction-id
+        - x-gravitee-request-id
+        - x-request-id
+        - x-real-ip
+        - x-ot-span-context
+        - x-cloud-trace-context
+        - traceparent
+      correlation-fields:
+        - x-gravitee-transaction-id
+        - x-gravitee-request-id
+        - x-request-id
+        - x-real-ip
+        - x-ot-span-context
+        - x-cloud-trace-context
+        - traceparent
+    propagation:
+      type: B3
+    grpc:
+      enabled: true
+  kafka:
+    consumer:
+      bootstrap-servers: localhost:9092 #Will be overrided in AbstractKafkaAndPostgresAndVaultTestContainerTest
+      enable-auto-commit: true
+      auto-offset-reset: latest
+    producer:
+      retries: 1
+      bootstrap-servers: localhost:9092 #Will be overrided in AbstractKafkaAndPostgresAndVaultTestContainerTest
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: com.github.daniel.shuy.kafka.protobuf.serde.KafkaProtobufSerializer
+management:
+  endpoints:
+    web:
+      base-path: "/"
+  metrics:
+    enable:
+      jvm: true
+      all: true
+    export:
+      prometheus:
+        enabled: true
+  endpoint:
+    health:
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+grpc:
+  client:
+    third-party-server:
+      address: static://localhost:${grpcmock.server.port:50101}
+      enableKeepAlive: true
+      keepAliveWithoutCalls: true
+      negotiationType: plaintext
+  server:
+    port: 0
+server:
+  port: 0
+  shutdown: graceful
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+thirdparty:
+  url: http://localhost:${wiremock.server.port:8080}
+quanto:
+  audit:
+    topic: tsp-audit
+    bootstrapserver: localhost:9092 #Will be overrided in AbstractKafkaAndPostgresAndVaultTestContainerTest
+    security.protocol: PLAINTEXT
+    gateway:
+      request:
+        header:
+          key: :x-gravitee-request-id

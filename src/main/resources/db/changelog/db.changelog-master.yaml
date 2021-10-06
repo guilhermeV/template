@@ -1,0 +1,14 @@
+databaseChangeLog:
+  - changeSet:
+      id: tag_version_0_0_0
+      author: argenta
+      tagDatabase:
+        tag: version_0.0.0
+  - include:
+      relativeToChangelogFile: true
+      file: changes/create-template-example-object-table.sql
+  - changeSet:
+      id: tag_version_0_1_0
+      author: argenta
+      tagDatabase:
+        tag: version_0.1.0

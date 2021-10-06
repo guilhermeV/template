@@ -1,0 +1,106 @@
+spring:
+  main:
+    banner-mode: "off"
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/template}
+  liquibase:
+    enabled: true
+  zipkin:
+    enabled: false
+  sleuth:
+    traceId128: true
+    baggage:
+      remote-fields:
+        - x-gravitee-transaction-id
+        - ${QUANTO_AUDIT_GATEWAY_REQUEST_HEADER_KEY:x-gravitee-request-id}
+        - x-request-id
+        - x-real-ip
+        - x-ot-span-context
+        - x-cloud-trace-context
+        - traceparent
+        - x-jti
+      correlation-fields:
+        - x-gravitee-transaction-id
+        - ${QUANTO_AUDIT_GATEWAY_REQUEST_HEADER_KEY:x-gravitee-request-id}
+        - x-request-id
+        - x-real-ip
+        - x-ot-span-context
+        - x-cloud-trace-context
+        - traceparent
+        - x-jti
+    propagation:
+      type: B3
+    grpc:
+      enabled: true
+  kafka:
+    consumer:
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      enable-auto-commit: true
+      auto-offset-reset: latest
+    producer:
+      retries: ${KAFKA_NUM_RETRIES:1}
+      bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: com.github.daniel.shuy.kafka.protobuf.serde.KafkaProtobufSerializer
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,metrics,prometheus"
+      base-path: "/"
+  metrics:
+    enable:
+      jvm: true
+      all: true
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+      group:
+        readiness:
+          include: templateDatabase, grpcChannel
+        liveness:
+          include: templateDatabase, grpcChannel
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+grpc:
+  client:
+    third-party-server:
+      ###### In kubernetes you must use dns:// and the port of service must be right configured
+      ##### ex: dns:///service.metadata.name.namespace:port
+      ##### ex: dns:///tsp-user-manager-grpc.tsp-user-manager:80
+      ##### Obs: Yes, its necessary three bars.
+      address: ${THIRDPARDY_GRPC_URL:static://localhost:50101}
+      enableKeepAlive: true
+      keepAliveWithoutCalls: true
+      negotiationType: plaintext
+  server:
+    port: 50101
+server:
+  port: 8080
+  shutdown: graceful
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    org.springframework.vault: DEBUG
+    org.apache.http: DEBUG
+thirdparty:
+  url: ${THIRDPARDY_URL:http://localhost:8080}
+quanto:
+  audit:
+    topic: tsp-audit
+    bootstrapserver: ${KAFKA_AUDIT_BOOTSTRAP_SERVERS:localhost:9092}
+    retries: 1
+    security.protocol: SSL
+    gateway:
+      request:
+        header:
+          key: ${QUANTO_AUDIT_GATEWAY_REQUEST_HEADER_KEY:x-gravitee-request-id}
